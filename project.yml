@@ -1,0 +1,32 @@
+name: Cadence
+options:
+  bundleIdPrefix: com.cadence
+  deploymentTarget:
+    macOS: "13.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: false
+
+targets:
+  Cadence:
+    type: application
+    platform: macOS
+    sources:
+      - path: .
+        excludes:
+          - project.yml
+          - README.md
+          - .gitignore
+          - "*.xcodeproj/**"
+        group: Cadence
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cadence.app
+        PRODUCT_NAME: Cadence
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        CODE_SIGN_STYLE: Automatic
+        INFOPLIST_KEY_LSUIElement: true
+        INFOPLIST_KEY_NSHighResolutionCapable: true
+        GENERATE_INFOPLIST_FILE: true
