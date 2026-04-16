@@ -38,14 +38,20 @@ struct TimerRingView: View {
 
             // Center content
             VStack(spacing: 2) {
+                if isOverflow {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "#1D9E75"))
+                }
+
                 Text(timeString)
                     .font(.system(size: 26, weight: .regular, design: .monospaced))
                     .foregroundColor(.primary)
 
                 if isOverflow {
-                    Text("continúa...")
-                        .font(.system(size: 9))
-                        .foregroundColor(mode.color)
+                    Text(NSLocalizedString("completed_label", comment: ""))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(hex: "#1D9E75"))
                 }
             }
         }

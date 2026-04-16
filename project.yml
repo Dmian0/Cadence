@@ -5,6 +5,10 @@ options:
     macOS: "13.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: false
+  knownRegions:
+    - es
+    - en
+  defaultConfig: Debug
 
 targets:
   Cadence:
@@ -17,6 +21,7 @@ targets:
           - README.md
           - .gitignore
           - "*.xcodeproj/**"
+          - "**/*.md"
         group: Cadence
     settings:
       base:

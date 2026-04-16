@@ -22,7 +22,7 @@ struct PopoverView: View {
                         .font(.system(size: 11))
                     Text("\(vm.streak)")
                         .font(.system(size: 11, weight: .medium))
-                    Text("racha")
+                    Text(NSLocalizedString("streak", comment: ""))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -42,6 +42,14 @@ struct PopoverView: View {
 
             // ── Mode tabs ────────────────────────────────────────
             ModeTabsView(vm: vm)
+
+            // ── Undo pill ────────────────────────────────────────
+            if vm.showUndoModeChange {
+                UndoPillView { vm.undoModeChange() }
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+            }
 
             // ── Timer ────────────────────────────────────────────
             VStack(spacing: 12) {
@@ -75,7 +83,7 @@ struct PopoverView: View {
                         Circle()
                             .fill(Color(hex: "#1D9E75"))
                             .frame(width: 6, height: 6)
-                        Text("Esperando respuesta IA — pausar")
+                        Text(NSLocalizedString("ai_pause_button", comment: ""))
                             .font(.system(size: 11))
                             .foregroundColor(Color(hex: "#0F6E56"))
                     }
@@ -93,7 +101,7 @@ struct PopoverView: View {
             }
 
             // ── Session history dots ─────────────────────────────
-            HistoryDotsView(sessions: vm.recentHistory, currentMode: vm.currentMode)
+            HistoryDotsView(sessions: vm.recentHistory, currentMode: vm.currentMode, totalCount: vm.todaySessions.count)
 
             Divider().opacity(0.5)
 
@@ -146,17 +154,17 @@ private struct OverflowBannerView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("Sesión completada")
-                .font(.system(size: 12, weight: .medium))
+            Text(NSLocalizedString("session_complete", comment: ""))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
 
             HStack(spacing: 8) {
-                Button("+ 5 min") {
+                Button(NSLocalizedString("extend_five", comment: "")) {
                     vm.extendSession()
                 }
                 .buttonStyle(PillButtonStyle(color: vm.currentMode.color))
 
-                Button("Terminar") {
+                Button(NSLocalizedString("finish", comment: "")) {
                     vm.finishFromOverflow()
                 }
                 .buttonStyle(PillButtonStyle(color: .primary.opacity(0.6)))
@@ -164,7 +172,7 @@ private struct OverflowBannerView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity)
-        .background(vm.currentMode.lightBackground)
+        .background(vm.currentMode.color.opacity(0.15))
         .cornerRadius(10)
     }
 }
@@ -179,7 +187,9 @@ private struct IterationCounterView: View {
             HStack(spacing: 5) {
                 Image(systemName: "plus.circle")
                     .font(.system(size: 11))
-                Text(count == 0 ? "Contar iteración IA" : "\(count) iteracion\(count == 1 ? "" : "es")")
+                Text(count == 0
+                     ? NSLocalizedString("count_iteration", comment: "")
+                     : String(format: NSLocalizedString(count == 1 ? "iterations_one" : "iterations_other", comment: ""), count))
                     .font(.system(size: 11))
             }
             .foregroundColor(.secondary)
@@ -192,36 +202,42 @@ private struct IterationCounterView: View {
 private struct HistoryDotsView: View {
     let sessions: [Session]
     let currentMode: SessionMode
+    let totalCount: Int
 
     private let totalSlots = 10
 
     var body: some View {
+        let visibleSessions = Array(sessions.suffix(totalSlots - 1)) // leave 1 slot for current
+        let filledCount = visibleSessions.count
+        let emptyCount = max(0, totalSlots - filledCount - 1)
+
         HStack(spacing: 3) {
-            ForEach(0..<totalSlots, id: \.self) { i in
-                if i < sessions.count {
-                    let session = sessions[i]
+            // Past sessions (sliding window — latest N)
+            ForEach(Array(visibleSessions.enumerated()), id: \.offset) { _, session in
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(session.mode.color.opacity(session.wasCompleted ? 1 : 0.4))
+                    .frame(width: 10, height: 10)
+            }
+
+            // Current session slot — pulsing
+            RoundedRectangle(cornerRadius: 3)
+                .fill(currentMode.color.opacity(0.5))
+                .frame(width: 10, height: 10)
+                .overlay(
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(session.mode.color.opacity(session.wasCompleted ? 1 : 0.4))
-                        .frame(width: 10, height: 10)
-                } else if i == sessions.count {
-                    // Current session slot — pulsing
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(currentMode.color.opacity(0.5))
-                        .frame(width: 10, height: 10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 3)
-                                .stroke(currentMode.color, lineWidth: 1.5)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.primary.opacity(0.08))
-                        .frame(width: 10, height: 10)
-                }
+                        .stroke(currentMode.color, lineWidth: 1.5)
+                )
+
+            // Empty slots
+            ForEach(0..<emptyCount, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: 10, height: 10)
             }
 
             Spacer()
 
-            Text("hoy, \(sessions.count) ses.")
+            Text(String(format: NSLocalizedString("today_sessions", comment: ""), totalCount))
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
         }
@@ -236,11 +252,11 @@ struct StatsRowView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            StatCell(value: vm.focusTimeFormatted,   label: "Foco hoy")
+            StatCell(value: vm.focusTimeFormatted,   label: NSLocalizedString("focus_today", comment: ""))
             Divider().frame(height: 30)
-            StatCell(value: vm.aiWaitTimeFormatted,  label: "Esperas IA")
+            StatCell(value: vm.aiWaitTimeFormatted,  label: NSLocalizedString("ai_wait_stat", comment: ""))
             Divider().frame(height: 30)
-            StatCell(value: "\(vm.completionRate)%", label: "Completadas")
+            StatCell(value: "\(vm.flowScore)",        label: NSLocalizedString("flow_score", comment: ""))
         }
         .padding(.vertical, 4)
 
@@ -305,6 +321,31 @@ private struct CircleButton: View {
     }
 }
 
+// MARK: - Undo pill
+private struct UndoPillView: View {
+    let onUndo: () -> Void
+
+    var body: some View {
+        Button(action: onUndo) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(NSLocalizedString("mode_changed_undo", comment: ""))
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(.primary.opacity(0.8))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.08))
+            .cornerRadius(20)
+            .overlay(
+                Capsule().stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct PillButtonStyle: ButtonStyle {
     let color: Color
 
@@ -313,9 +354,9 @@ private struct PillButtonStyle: ButtonStyle {
             .font(.system(size: 12, weight: .medium))
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .background(color.opacity(configuration.isPressed ? 0.15 : 0.1))
+            .background(color.opacity(configuration.isPressed ? 0.3 : 0.2))
             .foregroundColor(color)
             .cornerRadius(20)
-            .overlay(Capsule().stroke(color.opacity(0.3), lineWidth: 0.5))
+            .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 0.5))
     }
 }

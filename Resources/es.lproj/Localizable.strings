@@ -1,0 +1,40 @@
+/* Cadence — Spanish (default) */
+
+// Modos
+"deep_work" = "Deep work";
+"ai_wait" = "AI wait";
+"review" = "Review";
+"break_mode" = "Break";
+
+// Header
+"streak" = "racha";
+
+// Timer
+"completed_label" = "completada";
+
+// Botones y acciones
+"ai_pause_button" = "Esperando respuesta IA — pausar";
+"count_iteration" = "Contar iteración IA";
+"iterations_one" = "%d iteración";
+"iterations_other" = "%d iteraciones";
+
+// Overflow banner
+"session_complete" = "Sesión completada";
+"extend_five" = "+ 5 min";
+"finish" = "Terminar";
+
+// Undo pill
+"mode_changed_undo" = "Modo cambiado — deshacer";
+
+// History
+"today_sessions" = "hoy, %d ses.";
+
+// Stats
+"focus_today" = "Foco hoy";
+"ai_wait_stat" = "Esperas IA";
+"flow_score" = "Flow score";
+
+// Break debt
+"on_track" = "Al día";
+"take_break_soon" = "Toma un break pronto";
+"break_needed" = "Break necesario";

@@ -8,10 +8,10 @@ enum SessionMode: String, CaseIterable, Codable {
 
     var label: String {
         switch self {
-        case .deep:   return "Deep work"
-        case .aiWait: return "AI wait"
-        case .review: return "Review"
-        case .rest:   return "Break"
+        case .deep:   return NSLocalizedString("deep_work", comment: "")
+        case .aiWait: return NSLocalizedString("ai_wait", comment: "")
+        case .review: return NSLocalizedString("review", comment: "")
+        case .rest:   return NSLocalizedString("break_mode", comment: "")
         }
     }
 

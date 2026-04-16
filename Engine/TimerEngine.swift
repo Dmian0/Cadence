@@ -53,8 +53,8 @@ final class TimerEngine: ObservableObject {
     /// Add seconds to current session (gentle overflow "+5 min")
     func extend(by seconds: Int) {
         isOverflow = false
-        secondsRemaining = seconds
-        totalSeconds += seconds
+        secondsRemaining += seconds
+        totalSeconds = secondsRemaining   // reset so progress ring starts full
         if !isRunning { start() }
     }
 

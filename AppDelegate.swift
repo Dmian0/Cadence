@@ -58,10 +58,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Cadence", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
+
+        // Language submenu
+        let langMenu = NSMenu()
+        let langs: [(String, String?)] = [
+            ("System", nil),
+            ("Español", "es"),
+            ("English", "en")
+        ]
+        let currentLang = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first
+        for (title, code) in langs {
+            let item = NSMenuItem(title: title, action: #selector(changeLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = code
+            if code == currentLang || (code == nil && currentLang == nil) {
+                item.state = .on
+            }
+            langMenu.addItem(item)
+        }
+        let langItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
+        menu.setSubmenu(langMenu, for: langItem)
+        menu.addItem(langItem)
+
+        menu.addItem(.separator())
+
+        // Dev: Reset all data
+        let resetItem = NSMenuItem(title: "Reset All Data", action: #selector(resetAllData), keyEquivalent: "")
+        resetItem.target = self
+        menu.addItem(resetItem)
+
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil  // reset so left click works next time
+    }
+
+    @objc private func changeLanguage(_ sender: NSMenuItem) {
+        let code = sender.representedObject as? String
+        if let code {
+            UserDefaults.standard.set([code], forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        UserDefaults.standard.synchronize()
+        refreshPopover()
+    }
+
+    @objc private func resetAllData() {
+        let keys = UserDefaults.standard.dictionaryRepresentation().keys
+        for key in keys where key.hasPrefix("cadence_") {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        UserDefaults.standard.synchronize()
+        vm.reloadData()
+        refreshPopover()
+    }
+
+    private func refreshPopover() {
+        popover.performClose(nil)
+        popover.contentViewController = NSHostingController(
+            rootView: PopoverView(vm: vm)
+        )
     }
 
     // MARK: - Popover
@@ -74,6 +133,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController = NSHostingController(
             rootView: PopoverView(vm: vm)
         )
+
+        // Close popover when the menubar hides in fullscreen to prevent
+        // the popover from drifting away from its anchor.
+        NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)
+            .sink { [weak self] notification in
+                guard let self,
+                      let popoverWindow = self.popover.contentViewController?.view.window,
+                      (notification.object as? NSWindow) === popoverWindow else { return }
+                self.popover.performClose(nil)
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Menubar label binding

@@ -10,6 +10,7 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var activeSession: Session?
     @Published var iterationCount: Int = 0
     @Published private(set) var showOverflowBanner: Bool = false
+    @Published var showUndoModeChange: Bool = false
 
     // MARK: - Day data
     @Published private(set) var todaySessions: [Session] = []
@@ -22,16 +23,39 @@ final class SessionViewModel: ObservableObject {
     private let store = DayStore()
     private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - Undo state
+    private var previousMode: SessionMode?
+    private var previousSession: Session?
+    private var previousSecondsRemaining: Int = 0
+    private var previousIterationCount: Int = 0
+    private var undoTimer: AnyCancellable?
+
     // MARK: - Init
     init() {
         loadToday()
         bindTimerEnd()
+
+        // Forward TimerEngine changes so SwiftUI views observing
+        // SessionViewModel also re-render on every timer tick.
+        timer.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Mode
 
     func setMode(_ mode: SessionMode) {
-        if activeSession != nil { endSession(completed: false) }
+        // Save state for undo if there's an active session
+        if activeSession != nil {
+            previousMode = currentMode
+            previousSession = activeSession
+            previousSecondsRemaining = timer.secondsRemaining
+            previousIterationCount = iterationCount
+            endSession(completed: false)
+            triggerUndo()
+        }
         currentMode = mode
         timer.load(seconds: mode.duration)
         iterationCount = 0
@@ -104,6 +128,48 @@ final class SessionViewModel: ObservableObject {
         showOverflowBanner = false
     }
 
+    // MARK: - Undo mode change
+
+    func undoModeChange() {
+        guard let prevMode = previousMode, let prevSession = previousSession else { return }
+        showUndoModeChange = false
+        undoTimer?.cancel()
+
+        // Remove the incomplete session that was saved when mode changed
+        if let lastIdx = todaySessions.lastIndex(where: { $0.id == prevSession.id }) {
+            todaySessions.remove(at: lastIdx)
+        } else if !todaySessions.isEmpty {
+            // The ended session was appended — remove the last one
+            todaySessions.removeLast()
+        }
+
+        // Restore previous state
+        currentMode = prevMode
+        activeSession = prevSession
+        iterationCount = previousIterationCount
+        timer.load(seconds: previousSecondsRemaining)
+        timer.start()
+        showOverflowBanner = false
+
+        // Clear undo state
+        previousMode = nil
+        previousSession = nil
+
+        store.save(sessions: todaySessions, streak: streak)
+    }
+
+    private func triggerUndo() {
+        showUndoModeChange = true
+        undoTimer?.cancel()
+        undoTimer = Just(())
+            .delay(for: .seconds(3), scheduler: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.showUndoModeChange = false
+                self?.previousMode = nil
+                self?.previousSession = nil
+            }
+    }
+
     // MARK: - Iteration counter
 
     func addIteration() {
@@ -140,6 +206,18 @@ final class SessionViewModel: ObservableObject {
         "\(timer.displayString)"
     }
 
+    /// Reset all state — used by dev reset in context menu
+    func reloadData() {
+        timer.stop()
+        activeSession = nil
+        iterationCount = 0
+        showOverflowBanner = false
+        showUndoModeChange = false
+        currentMode = .deep
+        timer.load(seconds: SessionMode.deep.duration)
+        loadToday()
+    }
+
     // Last 10 sessions for the dot history strip
     var recentHistory: [Session] {
         Array(todaySessions.suffix(10))
@@ -167,7 +245,10 @@ final class SessionViewModel: ObservableObject {
             setMode(.deep)
             return
         }
-        // For work modes: show gentle overflow banner
+        // Timer reached zero → session counts as completed regardless of
+        // whether the user extends or switches mode afterwards.
+        activeSession?.wasCompleted = true
+        // Show gentle overflow banner for +5 min / Terminar options
         showOverflowBanner = true
         NSSound.beep()   // subtle system beep — v2 will replace with custom sound
     }
@@ -209,9 +290,9 @@ enum BreakDebtLevel {
 
     var label: String {
         switch self {
-        case .ok:       return "Al día"
-        case .warning:  return "Toma un break pronto"
-        case .critical: return "Break necesario"
+        case .ok:       return NSLocalizedString("on_track", comment: "")
+        case .warning:  return NSLocalizedString("take_break_soon", comment: "")
+        case .critical: return NSLocalizedString("break_needed", comment: "")
         }
     }
 }

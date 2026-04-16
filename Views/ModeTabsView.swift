@@ -34,7 +34,7 @@ private struct ModeTab: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 5)
-            .background(isActive ? mode.lightBackground : Color.clear)
+            .background(isActive ? mode.color.opacity(0.15) : Color.clear)
             .foregroundColor(isActive ? mode.color : .secondary)
             .overlay(
                 RoundedRectangle(cornerRadius: 7)

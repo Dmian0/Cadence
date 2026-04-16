@@ -1,0 +1,40 @@
+/* Cadence — English */
+
+// Modes
+"deep_work" = "Deep work";
+"ai_wait" = "AI wait";
+"review" = "Review";
+"break_mode" = "Break";
+
+// Header
+"streak" = "streak";
+
+// Timer
+"completed_label" = "completed";
+
+// Actions
+"ai_pause_button" = "Waiting for AI — pause";
+"count_iteration" = "Count AI iteration";
+"iterations_one" = "%d iteration";
+"iterations_other" = "%d iterations";
+
+// Overflow banner
+"session_complete" = "Session complete";
+"extend_five" = "+ 5 min";
+"finish" = "Finish";
+
+// Undo pill
+"mode_changed_undo" = "Mode changed — undo";
+
+// History
+"today_sessions" = "today, %d ses.";
+
+// Stats
+"focus_today" = "Focus today";
+"ai_wait_stat" = "AI wait";
+"flow_score" = "Flow score";
+
+// Break debt
+"on_track" = "On track";
+"take_break_soon" = "Take a break soon";
+"break_needed" = "Break needed";
