@@ -1,164 +1,220 @@
+<div align="center">
+
 # Cadence
 
-A macOS menubar app for focused work in the AI era. Cadence reimagines the Pomodoro technique
-for a workflow where the bottleneck constantly shifts between you and the machine.
+**A macOS menubar timer for focused work in the AI era.**
 
-> Built with SwiftUI + AppKit. macOS 13.0+.
+Reimagines the Pomodoro technique for workflows where the bottleneck
+constantly shifts between you and the machine.
 
----
-
-## The problem with classic Pomodoro
-
-Traditional Pomodoro assumes *you* are always the bottleneck. You work, you rest, repeat.
-But modern AI-assisted work has a different rhythm — you think, you prompt, you wait, you review.
-That waiting time is neither work nor rest, and classic timers have no model for it.
-
-Cadence solves this with 4 session modes instead of 2.
+`SwiftUI` `AppKit` `Combine` `macOS 13.0+` `v0.1.0-beta`
 
 ---
 
-## Session modes
+</div>
 
-| Mode | Duration | Purpose |
-|------|----------|---------|
-| ⚡ Deep work | 25 min | Full focus. No interruptions. |
-| ⏳ AI wait | Adaptive | You sent a prompt. Timer captures the wait. |
-| 👁 Review | 10 min | Reading and evaluating AI output. |
-| ☁ Break | 5 min | Real rest. App suggests breaks based on debt. |
+## Why not classic Pomodoro?
 
-Each mode has a distinct color, score weight, and contributes differently to your daily stats.
+Traditional Pomodoro assumes **you** are always the bottleneck. You work, you rest, repeat.
 
----
+But AI-assisted work has a different rhythm:
 
-## Features
+```
+you think  -->  you prompt  -->  you wait  -->  you review  -->  repeat
+```
 
-### AI Pause button
-A dashed green button in the panel that appears whenever you're in a work session.
-One tap switches to AI Wait mode and starts timing the wait — capturing the exact moment
-you send a prompt without breaking your flow.
-
-### Iteration counter
-A subtle tap counter during active sessions. Each tap = one prompt sent to an AI.
-A high number (8+) in a single session often signals the problem isn't well defined.
-
-### Gentle overflow
-When a timer ends, there's no alarm. The ring pulses softly and two options appear:
-**+5 min** (extend) or **Finish** (mark complete). No anxiety, no hard stops.
-
-### Break debt
-Tracks consecutive work sessions without a real break. The panel shows a warning
-after 3 sessions and a red indicator after 5. The menubar icon reflects the level.
-
-### Flow score
-A 0–100 daily score weighted by session quality, not just volume.
-8 completed Deep Work sessions = 100. AI Wait contributes less than Review,
-which contributes less than Deep Work. Hard to game.
-
-### Session history dots
-A row of 10 colored squares showing your last 10 sessions.
-Color = mode. Faded = incomplete (skipped). The active slot pulses.
-
-### Daily stats
-- **Foco hoy** — total time in Deep Work + Review
-- **Esperas IA** — total time in AI Wait
-- **Completadas** — % of sessions that reached natural end
+That waiting time is neither work nor rest. Classic timers have no model for it.
+Cadence solves this with **4 session modes** and a **sub-session hierarchy** that captures the full AI workflow cycle without losing your place.
 
 ---
 
-## Project structure
+## Session Modes
+
+| | Mode | Duration | Score Weight | Purpose |
+|:---:|------|:--------:|:----------:|---------|
+| `#7F77DD` | **Deep Work** | 25 min | 1.0 | Full focus. No interruptions. |
+| `#1D9E75` | **AI Wait** | 5 min | 0.2 | You sent a prompt. Timer captures the wait. |
+| `#EF9F27` | **Review** | 10 min | 0.5 | Reading and evaluating AI output. |
+| `#378ADD` | **Break** | 5 min | 0.0 | Real rest. Suggested based on break debt. |
+
+---
+
+## Core Features
+
+### Sub-Session Hierarchy
+
+Sessions flow naturally through the AI work cycle without losing context:
+
+```
+Deep Work (parent)
+   |
+   |--- "Waiting for AI - pause"  --->  AI Wait (sub-session)
+   |                                        |
+   |                                        |--- "Response arrived"  --->  Review (sub-session)
+   |                                                                          |
+   |<--- "Back to Deep Work" (resumes with exact remaining time) -------------|
+```
+
+The parent session **suspends** with its remaining time preserved. When you return, the timer picks up exactly where you left off. Sub-sessions are stored inside the parent — your history stays clean.
+
+When switching modes via tabs during an active session, a **choice banner** appears:
+- **Continue as sub-session** — suspends current, starts child
+- **New independent session** — ends current, starts fresh
+
+---
+
+### Gentle Overflow
+
+When a timer ends, there's no alarm. The ring pulses softly and contextual options appear:
+
+| Context | Options |
+|---------|---------|
+| Normal session | **+5 min** &middot; **Finish** |
+| AI Wait sub-session | **+5 min** &middot; **Response arrived — review** |
+| Review sub-session | **+5 min** &middot; **Finish review** &middot; **Back to Deep Work** |
+
+Extending always adds to the current session. If those 5 minutes expire, the banner reappears. Repeat as needed. When you finish, the timer resets to the mode's original duration.
+
+---
+
+### Quick-Action Buttons
+
+Three dashed-border buttons that appear contextually during active sessions:
+
+| When in | Button | Action |
+|---------|--------|--------|
+| Deep Work | *"Waiting for AI — pause"* | Suspend parent, start AI Wait |
+| AI Wait (sub) | *"Response arrived — review"* | Complete AI Wait, start Review |
+| Review (sub) | *"Back to Deep Work"* | Complete Review, resume parent |
+
+---
+
+### Flow Score
+
+A **0-100 daily score** weighted by session quality, not just volume. Only parent sessions count — sub-sessions contribute through their parent.
+
+```
+8 completed Deep Work sessions = 100 points
+Review contributes half. AI Wait one-fifth.
+Incomplete sessions count at 30% weight.
+```
+
+---
+
+### More Features
+
+| Feature | Description |
+|---------|-------------|
+| **Break debt** | Tracks consecutive work sessions without rest. Warning at 3, critical at 5+. |
+| **Iteration counter** | Tap counter during sessions. High count (8+) suggests the prompt needs work. |
+| **History dots** | 10 colored squares showing recent sessions. Sub-sessions are smaller. Faded = incomplete. |
+| **Daily stats** | Focus time (Deep + Review), AI wait time, Flow score. |
+| **Streak** | Completed Deep Work sessions today. |
+| **Menubar icon** | SF Symbol + live timer. Left-click: panel. Right-click: language, reset, quit. |
+| **Localization** | Spanish and English. Switch from the context menu. |
+
+---
+
+## Project Structure
 
 ```
 Cadence/
-├── CadenceApp.swift          Entry point
-├── AppDelegate.swift         NSStatusItem + NSPopover
-├── Info.plist                LSUIElement=true (menubar-only)
-├── project.yml               XcodeGen config
-├── Models/
-│   ├── SessionMode.swift     4 modes, colors, weights, durations
-│   └── Session.swift         Session struct + DayRecord
-├── Engine/
-│   └── TimerEngine.swift     Combine-based countdown
-├── ViewModel/
-│   └── SessionViewModel.swift  App state, orchestrates everything
-├── Views/
-│   ├── PopoverView.swift     Main panel (280px)
-│   ├── TimerRingView.swift   Circular progress ring
-│   └── ModeTabsView.swift    Mode selector
-└── Store/
-    └── DayStore.swift        UserDefaults persistence (per-day key)
+|-- CadenceApp.swift              Entry point (@main)
+|-- AppDelegate.swift             NSStatusItem + NSPopover + context menu
+|-- project.yml                   XcodeGen config
+|
+|-- Models/
+|   |-- SessionMode.swift         4 modes: colors, weights, durations, symbols
+|   +-- Session.swift             Session struct (with sub-session hierarchy) + DayRecord
+|
+|-- Engine/
+|   +-- TimerEngine.swift         Combine-based 1Hz countdown, overflow, extend
+|
+|-- ViewModel/
+|   +-- SessionViewModel.swift    App brain: timer, sessions, sub-sessions, overflow, stats
+|
+|-- Views/
+|   |-- PopoverView.swift         Main panel (280px) + all sub-components
+|   |-- TimerRingView.swift       Circular progress ring with overflow pulse
+|   +-- ModeTabsView.swift        Horizontal mode selector
+|
+|-- Store/
+|   +-- DayStore.swift            UserDefaults persistence (JSON per day)
+|
++-- Resources/
+    |-- es.lproj/Localizable.strings
+    +-- en.lproj/Localizable.strings
 ```
 
 ---
 
 ## Setup
 
-### Requirements
-- macOS 13.0+
-- Xcode 15+
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+**Requirements:** macOS 13.0+ &middot; Xcode 15+ &middot; [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
-### Install XcodeGen
 ```bash
+# Install XcodeGen (if needed)
 brew install xcodegen
-```
 
-### Clone and run
-```bash
+# Clone, generate, open
 git clone https://github.com/Dmian0/Cadence.git
 cd Cadence
 xcodegen generate
 open Cadence.xcodeproj
 ```
 
-Press ⌘R in Xcode. The app appears in your menubar — no Dock icon.
+Press **Cmd+R** in Xcode. The app appears in your menubar — no Dock icon.
 
 ---
 
 ## Roadmap
 
-### v1 — current
+### v0.1.0-beta — current
+
 - [x] 4 session modes with distinct colors and weights
+- [x] Sub-session hierarchy (parent/child with suspend/resume)
+- [x] Quick-action buttons for AI workflow cycle
+- [x] Contextual overflow banners per session type
+- [x] Sub-session choice banner (sub-session vs independent)
 - [x] Menubar icon with live timer
-- [x] Expandable popover panel
-- [x] AI Pause quick button
+- [x] Gentle overflow (+5 min repeatable, no alarm)
+- [x] Break debt indicator (3 levels)
+- [x] Flow score (0-100, parent sessions only)
+- [x] Session history dots (size varies by session type)
 - [x] Iteration counter
-- [x] Gentle overflow (+5 min, no alarm)
-- [x] Break debt indicator
-- [x] Flow score
-- [x] Session history dots
-- [x] Daily stats (focus time, AI wait, completion rate)
+- [x] Daily stats (focus time, AI wait, flow score)
 - [x] UserDefaults persistence per day
+- [x] ES/EN localization
 
 ### v2 — planned
-- [ ] Intent + outcome logging ("what are you working on?" / "did you finish it?")
-- [ ] Weekly AI ratio (% deep work vs AI wait trend)
+
+- [ ] Intent + outcome logging
+- [ ] Weekly AI ratio (deep work vs AI wait trend)
 - [ ] Focus heatmap (GitHub-style contributions grid)
-- [ ] Focus Shield (auto-enable macOS Do Not Disturb during Deep Work)
+- [ ] Focus Shield (auto-enable macOS Do Not Disturb)
 - [ ] Ambient mode (soft visual instead of countdown)
 - [ ] Sound profiles per mode
 - [ ] Context tags (#frontend, #writing, #design)
-- [ ] Peak hours detection (learns your best focus window)
-- [ ] Personal records (only vs yourself, never others)
+- [ ] Peak hours detection
+- [ ] Personal records (only vs yourself)
 - [ ] Cross-day streak tracking
 
 ---
 
-## Tech decisions
+## Tech Decisions
 
-- **Menubar only** — `LSUIElement = true` in Info.plist, `.accessory` activation policy
-- **No CoreData** — UserDefaults is sufficient for v1's per-day flat data
-- **Combine timer** — `Timer.publish` over `Timer.scheduledTimer` for clean lifecycle management
-- **XcodeGen** — `project.yml` is versioned; `.xcodeproj` is gitignored
-- **No external dependencies** — pure Apple frameworks only (SwiftUI, AppKit, Combine)
-
----
-
-## Development notes
-
-`FEATURES.md` contains the full behavioral spec for every feature — exact formulas,
-visibility conditions, color values, and v2 descriptions. Reference it when implementing
-new features or debugging unexpected behavior.
+| Decision | Rationale |
+|----------|-----------|
+| Menubar only | `LSUIElement = true`, `.accessory` policy. No Dock icon, no main window. |
+| No CoreData | UserDefaults is sufficient for per-day flat data in v1. |
+| Combine timer | `Timer.publish` over `Timer.scheduledTimer` for clean lifecycle. |
+| XcodeGen | `project.yml` versioned, `.xcodeproj` gitignored. |
+| Zero dependencies | Pure Apple frameworks: SwiftUI, AppKit, Combine, Foundation. |
 
 ---
 
-*Cadence — work with the machine, not against its rhythm.*
+<div align="center">
+
+*Work with the machine, not against its rhythm.*
+
+</div>

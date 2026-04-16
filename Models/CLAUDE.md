@@ -31,12 +31,21 @@ Una sesión individual de trabajo.
 
 | Campo | Tipo | Descripción |
 |---|---|---|
+| Campo | Tipo | Descripción |
+|---|---|---|
 | `id` | `UUID` | Identificador único |
 | `mode` | `SessionMode` | Modo de la sesión |
 | `startedAt` | `Date` | Inicio |
 | `endedAt` | `Date?` | Fin (nil si activa) |
 | `iterationCount` | `Int` | Iteraciones IA contadas |
 | `wasCompleted` | `Bool` | Si completó la duración completa. Se marca `true` automáticamente cuando el timer llega a 0 (en `handleNaturalEnd`), no solo cuando el usuario hace click en "Terminar" |
+| `isSubSession` | `Bool` | `true` si fue iniciada como sub-sesión (derivado de `parentId != nil` en init) |
+| `parentSessionId` | `UUID?` | ID de la sesión padre (nil si es independiente) |
+| `subSessions` | `[Session]` | Sub-sesiones completadas dentro de esta (solo relevante en sesiones padre) |
+
+**Init:** `init(mode:parentId:)` — `parentId` es opcional (`nil` por defecto). Si se pasa un parentId, `isSubSession` se marca `true`.
+
+**Custom Codable decoder:** Implementa `init(from decoder:)` con `decodeIfPresent` + defaults para los 3 campos nuevos. Esto asegura backward compatibility con sesiones persistidas antes de la jerarquía.
 
 **Propiedades computadas:**
 - `duration` — Si `endedAt` es nil, usa `Date()` actual. Cuidado: esto significa que una sesión activa tiene duración creciente.
@@ -48,7 +57,7 @@ Agregado de un día. Se construye on-demand desde `todaySessions` en el ViewMode
 
 | Propiedad | Tipo | Descripción |
 |---|---|---|
-| `flowScore` | `Int` | 0–100, `min(100, (suma_pesos / 8.0) * 100)` |
+| `flowScore` | `Int` | 0–100, solo sesiones padre (`!isSubSession`). `min(100, (suma_pesos / 8.0) * 100)` |
 | `totalFocusTime` | `TimeInterval` | Suma de duración de sesiones `.deep` + `.review` |
 | `totalAIWaitTime` | `TimeInterval` | Suma de duración de sesiones `.aiWait` |
 | `completionRate` | `Int` | % de sesiones completadas (legacy, ya no se muestra en UI) |

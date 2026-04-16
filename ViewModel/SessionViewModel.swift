@@ -10,7 +10,13 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var activeSession: Session?
     @Published var iterationCount: Int = 0
     @Published private(set) var showOverflowBanner: Bool = false
-    @Published var showUndoModeChange: Bool = false
+    @Published private(set) var overflowContext: OverflowContext = .normal
+
+    // MARK: - Sub-session state
+    @Published private(set) var suspendedParentSession: Session? = nil
+    @Published private(set) var suspendedParentSeconds: Int = 0
+    @Published var showSubSessionChoice: Bool = false
+    @Published private(set) var pendingMode: SessionMode? = nil
 
     // MARK: - Day data
     @Published private(set) var todaySessions: [Session] = []
@@ -22,13 +28,6 @@ final class SessionViewModel: ObservableObject {
     // MARK: - Private
     private let store = DayStore()
     private var cancellables = Set<AnyCancellable>()
-
-    // MARK: - Undo state
-    private var previousMode: SessionMode?
-    private var previousSession: Session?
-    private var previousSecondsRemaining: Int = 0
-    private var previousIterationCount: Int = 0
-    private var undoTimer: AnyCancellable?
 
     // MARK: - Init
     init() {
@@ -47,19 +46,80 @@ final class SessionViewModel: ObservableObject {
     // MARK: - Mode
 
     func setMode(_ mode: SessionMode) {
-        // Save state for undo if there's an active session
+        guard mode != currentMode else { return }
+
         if activeSession != nil {
-            previousMode = currentMode
-            previousSession = activeSession
-            previousSecondsRemaining = timer.secondsRemaining
-            previousIterationCount = iterationCount
-            endSession(completed: false)
-            triggerUndo()
+            // Active session — show choice banner, pause timer
+            pendingMode = mode
+            showSubSessionChoice = true
+            timer.pause()
+        } else {
+            // No active session — clean switch
+            currentMode = mode
+            timer.load(seconds: mode.duration)
+            iterationCount = 0
+            showOverflowBanner = false
         }
+    }
+
+    // MARK: - Sub-session choice (from banner)
+
+    func confirmAsSubSession() {
+        guard let mode = pendingMode else { return }
+        showSubSessionChoice = false
+        pendingMode = nil
+
+        if suspendedParentSession != nil {
+            // Already in a sub-session — complete current, start sibling
+            completeCurrentSubSession()
+            startSubSession(mode: mode)
+        } else {
+            // First sub-session — suspend parent
+            suspendSession()
+            startSubSession(mode: mode)
+        }
+    }
+
+    func confirmAsIndependent() {
+        guard let mode = pendingMode else { return }
+        showSubSessionChoice = false
+        pendingMode = nil
+
+        // Close current session as completed (user chose to end it)
+        endSession(completed: true)
+
+        // Clear any suspended parent
+        suspendedParentSession = nil
+        suspendedParentSeconds = 0
+
+        // Start fresh independent session setup
         currentMode = mode
         timer.load(seconds: mode.duration)
         iterationCount = 0
         showOverflowBanner = false
+    }
+
+    func cancelModeChange() {
+        showSubSessionChoice = false
+        pendingMode = nil
+        if activeSession != nil { timer.start() }
+    }
+
+    // MARK: - Quick-action transitions
+
+    func activateAIWait() {
+        suspendSession()
+        startSubSession(mode: .aiWait)
+    }
+
+    func activateReview() {
+        completeCurrentSubSession()
+        startSubSession(mode: .review)
+    }
+
+    func returnToDeepWork() {
+        completeCurrentSubSession()
+        resumeParentSession()
     }
 
     // MARK: - Session lifecycle
@@ -85,16 +145,31 @@ final class SessionViewModel: ObservableObject {
 
     func endSession(completed: Bool) {
         guard var session = activeSession else { return }
-        session.endedAt       = Date()
-        session.wasCompleted  = completed
+        session.endedAt        = Date()
+        session.wasCompleted   = completed
         session.iterationCount = iterationCount
 
         timer.stop()
         activeSession      = nil
         iterationCount     = 0
         showOverflowBanner = false
+        showSubSessionChoice = false
 
-        todaySessions.append(session)
+        if var parent = suspendedParentSession {
+            // Ending during a sub-session — terminate parent too
+            parent.subSessions.append(session)
+            parent.endedAt = Date()
+            parent.wasCompleted = completed
+            todaySessions.append(parent)
+            suspendedParentSession = nil
+            suspendedParentSeconds = 0
+        } else {
+            todaySessions.append(session)
+        }
+
+        // Reset timer to mode's original duration
+        timer.load(seconds: currentMode.duration)
+
         updateStreak()
         store.save(sessions: todaySessions, streak: streak)
     }
@@ -125,49 +200,25 @@ final class SessionViewModel: ObservableObject {
 
     func finishFromOverflow() {
         endSession(completed: true)
-        showOverflowBanner = false
     }
 
-    // MARK: - Undo mode change
-
-    func undoModeChange() {
-        guard let prevMode = previousMode, let prevSession = previousSession else { return }
-        showUndoModeChange = false
-        undoTimer?.cancel()
-
-        // Remove the incomplete session that was saved when mode changed
-        if let lastIdx = todaySessions.lastIndex(where: { $0.id == prevSession.id }) {
-            todaySessions.remove(at: lastIdx)
-        } else if !todaySessions.isEmpty {
-            // The ended session was appended — remove the last one
-            todaySessions.removeLast()
-        }
-
-        // Restore previous state
-        currentMode = prevMode
-        activeSession = prevSession
-        iterationCount = previousIterationCount
-        timer.load(seconds: previousSecondsRemaining)
-        timer.start()
+    /// Overflow action: from Review sub-session, return to parent
+    func reviewOverflowReturnToParent() {
         showOverflowBanner = false
-
-        // Clear undo state
-        previousMode = nil
-        previousSession = nil
-
-        store.save(sessions: todaySessions, streak: streak)
+        completeCurrentSubSession()
+        resumeParentSession()
     }
 
-    private func triggerUndo() {
-        showUndoModeChange = true
-        undoTimer?.cancel()
-        undoTimer = Just(())
-            .delay(for: .seconds(3), scheduler: DispatchQueue.main)
-            .sink { [weak self] in
-                self?.showUndoModeChange = false
-                self?.previousMode = nil
-                self?.previousSession = nil
-            }
+    /// Overflow action: from AI Wait sub-session, transition to Review
+    func aiWaitOverflowStartReview() {
+        showOverflowBanner = false
+        completeCurrentSubSession()
+        startSubSession(mode: .review)
+    }
+
+    /// Overflow action: finish Review sub-session (end both sub + parent)
+    func finishReviewFromOverflow() {
+        endSession(completed: true)
     }
 
     // MARK: - Iteration counter
@@ -212,7 +263,10 @@ final class SessionViewModel: ObservableObject {
         activeSession = nil
         iterationCount = 0
         showOverflowBanner = false
-        showUndoModeChange = false
+        showSubSessionChoice = false
+        pendingMode = nil
+        suspendedParentSession = nil
+        suspendedParentSeconds = 0
         currentMode = .deep
         timer.load(seconds: SessionMode.deep.duration)
         loadToday()
@@ -221,6 +275,54 @@ final class SessionViewModel: ObservableObject {
     // Last 10 sessions for the dot history strip
     var recentHistory: [Session] {
         Array(todaySessions.suffix(10))
+    }
+
+    // MARK: - Sub-session helpers (private)
+
+    private func suspendSession() {
+        suspendedParentSession = activeSession
+        suspendedParentSeconds = timer.secondsRemaining
+        timer.stop()
+        activeSession = nil
+    }
+
+    private func startSubSession(mode: SessionMode) {
+        let parentId = suspendedParentSession?.id
+        currentMode = mode
+        let session = Session(mode: mode, parentId: parentId)
+        activeSession = session
+        iterationCount = 0
+        showOverflowBanner = false
+        timer.load(seconds: mode.duration)
+        timer.start()
+    }
+
+    private func completeCurrentSubSession() {
+        guard var session = activeSession else { return }
+        session.endedAt = Date()
+        session.wasCompleted = true
+        session.iterationCount = iterationCount
+        timer.stop()
+
+        if suspendedParentSession != nil {
+            suspendedParentSession!.subSessions.append(session)
+        }
+
+        activeSession = nil
+        iterationCount = 0
+        showOverflowBanner = false
+    }
+
+    private func resumeParentSession() {
+        guard let parent = suspendedParentSession else { return }
+        currentMode = parent.mode
+        activeSession = parent
+        iterationCount = parent.iterationCount
+        timer.load(seconds: suspendedParentSeconds)
+        timer.start()
+
+        suspendedParentSession = nil
+        suspendedParentSeconds = 0
     }
 
     // MARK: - Private helpers
@@ -245,24 +347,36 @@ final class SessionViewModel: ObservableObject {
             setMode(.deep)
             return
         }
-        // Timer reached zero → session counts as completed regardless of
-        // whether the user extends or switches mode afterwards.
+
+        // Timer reached zero → session counts as completed
         activeSession?.wasCompleted = true
-        // Show gentle overflow banner for +5 min / Terminar options
+
+        // Determine overflow context based on sub-session state
+        if activeSession?.isSubSession == true, suspendedParentSession != nil {
+            if currentMode == .aiWait {
+                overflowContext = .aiWaitSub
+            } else if currentMode == .review {
+                overflowContext = .reviewSub
+            } else {
+                overflowContext = .normal
+            }
+        } else {
+            overflowContext = .normal
+        }
+
         showOverflowBanner = true
-        NSSound.beep()   // subtle system beep — v2 will replace with custom sound
+        NSSound.beep()
     }
 
     private func updateStreak() {
         let deepCompleted = todaySessions.filter {
             $0.mode == .deep && $0.wasCompleted
         }.count
-        streak = deepCompleted  // streak = completed deep sessions today
-        // v2: carry streak across days using persistent date tracking
+        streak = deepCompleted
     }
 
     private func loadToday() {
-        let record   = store.loadToday()
+        let record    = store.loadToday()
         todaySessions = record.sessions
         streak        = record.streak
     }
@@ -274,6 +388,13 @@ final class SessionViewModel: ObservableObject {
         if h > 0 { return "\(h)h \(m)m" }
         return "\(m)m"
     }
+}
+
+// MARK: - Overflow context
+enum OverflowContext {
+    case normal       // independent session: "+5 min" / "Terminar"
+    case aiWaitSub    // AI Wait sub-session: "+5 min" / "Llegó la respuesta — revisar"
+    case reviewSub    // Review sub-session: "+5 min" / "Terminar review" / "Volver a Deep Work"
 }
 
 // MARK: - Break debt level

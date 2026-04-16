@@ -43,9 +43,9 @@ struct PopoverView: View {
             // ── Mode tabs ────────────────────────────────────────
             ModeTabsView(vm: vm)
 
-            // ── Undo pill ────────────────────────────────────────
-            if vm.showUndoModeChange {
-                UndoPillView { vm.undoModeChange() }
+            // ── Sub-session choice banner ────────────────────────
+            if vm.showSubSessionChoice {
+                SubSessionChoiceBanner(vm: vm)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     .padding(.horizontal, 16)
                     .padding(.top, 6)
@@ -60,41 +60,49 @@ struct PopoverView: View {
                     isOverflow: vm.timer.isOverflow
                 )
 
-                // Overflow banner (gentle, no alarm)
+                // Overflow banner or controls
                 if vm.showOverflowBanner {
                     OverflowBannerView(vm: vm)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                } else {
-                    // Controls
+                } else if !vm.showSubSessionChoice {
                     ControlsView(vm: vm)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .animation(.spring(response: 0.35), value: vm.showOverflowBanner)
+            .animation(.spring(response: 0.35), value: vm.showSubSessionChoice)
 
-            // ── AI Pause shortcut (only during non-AI sessions) ──
-            if vm.currentMode != .aiWait && vm.activeSession != nil {
-                Button {
-                    vm.setMode(.aiWait)
-                    vm.startSession()
-                } label: {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color(hex: "#1D9E75"))
-                            .frame(width: 6, height: 6)
-                        Text(NSLocalizedString("ai_pause_button", comment: ""))
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(hex: "#0F6E56"))
+            // ── Quick-action buttons (context-dependent) ─────────
+            if vm.activeSession != nil && !vm.showSubSessionChoice && !vm.showOverflowBanner {
+                Group {
+                    // Deep Work active → "Waiting for AI — pause"
+                    if vm.currentMode == .deep {
+                        quickActionButton(
+                            color: SessionMode.aiWait.color,
+                            textKey: "ai_pause_button",
+                            action: { vm.activateAIWait() }
+                        )
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(hex: "#1D9E75").opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4]))
-                    )
+
+                    // AI Wait sub-session → "Response arrived — review"
+                    if vm.currentMode == .aiWait && vm.suspendedParentSession != nil {
+                        quickActionButton(
+                            color: SessionMode.review.color,
+                            textKey: "response_arrived_review",
+                            action: { vm.activateReview() }
+                        )
+                    }
+
+                    // Review sub-session → "Return to Deep Work"
+                    if vm.currentMode == .review && vm.suspendedParentSession != nil {
+                        quickActionButton(
+                            color: SessionMode.deep.color,
+                            textKey: "return_to_deep_work",
+                            action: { vm.returnToDeepWork() }
+                        )
+                    }
                 }
-                .buttonStyle(.plain)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
                 .transition(.opacity)
@@ -109,6 +117,77 @@ struct PopoverView: View {
             StatsRowView(vm: vm)
         }
         .frame(width: 280)
+    }
+
+    // Reusable quick-action button with dashed border
+    private func quickActionButton(color: Color, textKey: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 6, height: 6)
+                Text(NSLocalizedString(textKey, comment: ""))
+                    .font(.system(size: 11))
+                    .foregroundColor(color)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(color.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [4]))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Sub-session choice banner
+private struct SubSessionChoiceBanner: View {
+    @ObservedObject var vm: SessionViewModel
+
+    var body: some View {
+        VStack(spacing: 10) {
+            // Info about the active session
+            HStack(spacing: 4) {
+                Text(vm.currentMode.emoji).font(.system(size: 11))
+                Text("\(vm.currentMode.label) · \(vm.timer.displayString)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+
+            // Prominent button — continue as sub-session
+            if let pending = vm.pendingMode {
+                Button {
+                    vm.confirmAsSubSession()
+                } label: {
+                    Text(NSLocalizedString("continue_as_subsession", comment: ""))
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(pending.color.opacity(0.15))
+                        .foregroundColor(pending.color)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(pending.color.opacity(0.4), lineWidth: 0.5)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Link-style — new independent session
+            Button {
+                vm.confirmAsIndependent()
+            } label: {
+                Text(NSLocalizedString("new_independent_session", comment: ""))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(vm.currentMode.color.opacity(0.15))
+        .cornerRadius(10)
     }
 }
 
@@ -139,7 +218,7 @@ private struct ControlsView: View {
             }
         }
 
-        // Iteration counter (only during active AI-related sessions)
+        // Iteration counter (only during active non-rest sessions)
         if vm.activeSession != nil && vm.currentMode != .rest {
             IterationCounterView(count: vm.iterationCount) {
                 vm.addIteration()
@@ -148,7 +227,7 @@ private struct ControlsView: View {
     }
 }
 
-// MARK: - Overflow banner
+// MARK: - Overflow banner (context-dependent)
 private struct OverflowBannerView: View {
     @ObservedObject var vm: SessionViewModel
 
@@ -158,22 +237,71 @@ private struct OverflowBannerView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
 
-            HStack(spacing: 8) {
-                Button(NSLocalizedString("extend_five", comment: "")) {
-                    vm.extendSession()
-                }
-                .buttonStyle(PillButtonStyle(color: vm.currentMode.color))
-
-                Button(NSLocalizedString("finish", comment: "")) {
-                    vm.finishFromOverflow()
-                }
-                .buttonStyle(PillButtonStyle(color: .primary.opacity(0.6)))
+            switch vm.overflowContext {
+            case .normal:
+                normalOverflowButtons
+            case .aiWaitSub:
+                aiWaitSubOverflowButtons
+            case .reviewSub:
+                reviewSubOverflowButtons
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity)
         .background(vm.currentMode.color.opacity(0.15))
         .cornerRadius(10)
+    }
+
+    // Independent session: "+5 min" / "Terminar"
+    private var normalOverflowButtons: some View {
+        HStack(spacing: 8) {
+            Button(NSLocalizedString("extend_five", comment: "")) {
+                vm.extendSession()
+            }
+            .buttonStyle(PillButtonStyle(color: vm.currentMode.color))
+
+            Button(NSLocalizedString("finish", comment: "")) {
+                vm.finishFromOverflow()
+            }
+            .buttonStyle(PillButtonStyle(color: .primary.opacity(0.6)))
+        }
+    }
+
+    // AI Wait sub-session: "+5 min" / "Llegó la respuesta — revisar"
+    private var aiWaitSubOverflowButtons: some View {
+        HStack(spacing: 8) {
+            Button(NSLocalizedString("extend_five", comment: "")) {
+                vm.extendSession()
+            }
+            .buttonStyle(PillButtonStyle(color: vm.currentMode.color))
+
+            Button(NSLocalizedString("response_arrived_review", comment: "")) {
+                vm.aiWaitOverflowStartReview()
+            }
+            .buttonStyle(PillButtonStyle(color: SessionMode.review.color))
+        }
+    }
+
+    // Review sub-session: "+5 min" / "Terminar review" / "Volver a Deep Work"
+    private var reviewSubOverflowButtons: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                Button(NSLocalizedString("extend_five", comment: "")) {
+                    vm.extendSession()
+                }
+                .buttonStyle(PillButtonStyle(color: vm.currentMode.color))
+
+                Button(NSLocalizedString("finish_review", comment: "")) {
+                    vm.finishReviewFromOverflow()
+                }
+                .buttonStyle(PillButtonStyle(color: .primary.opacity(0.6)))
+            }
+
+            Button(NSLocalizedString("return_to_deep_work", comment: "")) {
+                vm.reviewOverflowReturnToParent()
+            }
+            .buttonStyle(PillButtonStyle(color: SessionMode.deep.color))
+        }
     }
 }
 
@@ -207,16 +335,17 @@ private struct HistoryDotsView: View {
     private let totalSlots = 10
 
     var body: some View {
-        let visibleSessions = Array(sessions.suffix(totalSlots - 1)) // leave 1 slot for current
+        let visibleSessions = Array(sessions.suffix(totalSlots - 1))
         let filledCount = visibleSessions.count
         let emptyCount = max(0, totalSlots - filledCount - 1)
 
         HStack(spacing: 3) {
             // Past sessions (sliding window — latest N)
             ForEach(Array(visibleSessions.enumerated()), id: \.offset) { _, session in
+                let dotSize: CGFloat = session.isSubSession ? 7 : 10
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(session.mode.color.opacity(session.wasCompleted ? 1 : 0.4))
-                    .frame(width: 10, height: 10)
+                    .fill(session.mode.color.opacity(session.wasCompleted ? 1 : 0.35))
+                    .frame(width: dotSize, height: dotSize)
             }
 
             // Current session slot — pulsing
@@ -316,31 +445,6 @@ private struct CircleButton: View {
                         lineWidth: 0.5
                     )
                 )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Undo pill
-private struct UndoPillView: View {
-    let onUndo: () -> Void
-
-    var body: some View {
-        Button(action: onUndo) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(NSLocalizedString("mode_changed_undo", comment: ""))
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundColor(.primary.opacity(0.8))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(Color.primary.opacity(0.08))
-            .cornerRadius(20)
-            .overlay(
-                Capsule().stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
-            )
         }
         .buttonStyle(.plain)
     }

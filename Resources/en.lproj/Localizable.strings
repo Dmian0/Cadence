@@ -23,8 +23,16 @@
 "extend_five" = "+ 5 min";
 "finish" = "Finish";
 
-// Undo pill
-"mode_changed_undo" = "Mode changed — undo";
+// Sub-session choice
+"continue_as_subsession" = "Continue as sub-session";
+"new_independent_session" = "new independent session";
+
+// Quick-action buttons
+"response_arrived_review" = "Response arrived — review";
+"return_to_deep_work" = "Back to Deep Work";
+
+// Sub-session overflow
+"finish_review" = "Finish review";
 
 // History
 "today_sessions" = "today, %d ses.";

@@ -34,7 +34,11 @@ String(format: NSLocalizedString("today_sessions", comment: ""), count)
 | `session_complete` | Sesión completada | Session complete | OverflowBannerView |
 | `extend_five` | + 5 min | + 5 min | OverflowBannerView |
 | `finish` | Terminar | Finish | OverflowBannerView |
-| `mode_changed_undo` | Modo cambiado — deshacer | Mode changed — undo | UndoPillView |
+| `continue_as_subsession` | Continuar como sub-sesión | Continue as sub-session | SubSessionChoiceBanner |
+| `new_independent_session` | nueva sesión independiente | new independent session | SubSessionChoiceBanner |
+| `response_arrived_review` | Llegó la respuesta — revisar | Response arrived — review | Quick-action + overflow |
+| `return_to_deep_work` | Volver a Deep Work | Back to Deep Work | Quick-action + overflow |
+| `finish_review` | Terminar review | Finish review | OverflowBannerView (review sub) |
 | `today_sessions` | hoy, %d ses. | today, %d ses. | HistoryDotsView |
 | `focus_today` | Foco hoy | Focus today | StatsRowView |
 | `ai_wait_stat` | Esperas IA | AI wait | StatsRowView |

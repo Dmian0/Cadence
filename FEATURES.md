@@ -114,14 +114,36 @@ Store/
 - **Skip (botón secundario derecho, 36px):** Termina la sesión como incompleta
   y avanza al siguiente modo lógico (Deep Work → Break, cualquier otro → Deep Work).
 
-### AI Pause Button
-- Botón con borde punteado verde que aparece en el panel cuando:
-  - El modo actual NO es `.aiWait`, Y
-  - Hay una sesión activa.
-- Texto: "Esperando respuesta IA — pausar"
-- Al pulsarlo: cambia al modo `.aiWait` e inicia una nueva sesión inmediatamente.
-- Desaparece cuando el modo activo es `.aiWait`.
-- Permite capturar el tiempo de espera de IA sin interrumpir el flujo.
+### Quick-Action Buttons (Botones de acceso rápido)
+Tres botones contextuales con borde punteado que crean el ciclo de trabajo con IA:
+
+```
+[Deep Work]   →  "Esperando respuesta IA — pausar"  →  [AI Wait sub-sesión]
+[AI Wait]     →  "Llegó la respuesta — revisar"      →  [Review sub-sesión]
+[Review]      →  "Volver a Deep Work"                →  [Deep Work] (reanuda padre)
+```
+
+- **"Esperando respuesta IA — pausar"** (verde): Visible en Deep Work con sesión activa.
+  Suspende la sesión padre y crea una sub-sesión AI Wait.
+- **"Llegó la respuesta — revisar"** (ámbar): Visible en AI Wait con padre suspendido.
+  Completa AI Wait, inicia Review sub-sesión.
+- **"Volver a Deep Work"** (púrpura): Visible en Review con padre suspendido.
+  Completa Review, reanuda la sesión padre con el tiempo exacto donde quedó.
+- Los tres desaparecen cuando no hay sesión activa o cuando hay un banner visible.
+
+### Session Hierarchy (Sub-sesiones)
+- **Sesión padre**: iniciada manualmente desde un tab. Dot grande (10px) en historial.
+- **Sub-sesión**: iniciada desde botón de acceso rápido. Dot pequeño (7px) en historial.
+  La sesión padre se suspende en background con su tiempo restante guardado.
+- Al regresar a Deep Work desde Review, se reanuda la sesión padre original.
+- Sub-sesiones se almacenan dentro del array `subSessions` del padre.
+- Solo sesiones padre cuentan para el Flow Score.
+
+### Sub-Session Choice Banner
+- Al cambiar de tab mientras hay sesión activa, aparece un banner inline (no modal):
+  - **"Continuar como sub-sesión"** (botón prominente): Suspende sesión actual, inicia sub-sesión.
+  - **"nueva sesión independiente"** (link): Termina sesión actual como completada, inicia nueva independiente.
+- Si el usuario cierra el popover sin elegir, la sesión original continúa corriendo.
 
 ### Iteration Counter
 - Botón de texto pequeño debajo de los controles principales.
@@ -139,10 +161,14 @@ Store/
   1. El timer se pausa en 00:00.
   2. El anillo cambia a opacidad reducida y pulsa suavemente.
   3. El texto central muestra "continúa..." en lugar del tiempo.
-  4. En el panel aparece un banner con dos opciones:
-     - **+ 5 min:** Extiende la sesión 5 minutos más y reanuda el timer.
-     - **Terminar:** Marca la sesión como completada y la guarda.
-- El banner tiene el fondo `lightBackground` del modo activo.
+  4. En el panel aparece un banner contextual según el tipo de sesión:
+     - **Sesión normal:** "+5 min" / "Terminar"
+     - **AI Wait sub-sesión:** "+5 min" / "Llegó la respuesta — revisar"
+     - **Review sub-sesión:** "+5 min" / "Terminar review" / "Volver a Deep Work"
+- **+ 5 min** siempre extiende la sesión actual (no crea nueva ni resetea timer).
+- Si los +5 min expiran, el banner vuelve a aparecer (repetible N veces).
+- Al terminar ("Terminar"), el timer se resetea a la duración original del modo.
+- El banner tiene el fondo `mode.color.opacity(0.15)`.
 - Solo un `NSSound.beep()` como notificación (v2 reemplaza con sonido personalizado).
 
 ### Break Debt
@@ -158,8 +184,9 @@ Store/
 
 ### Flow Score
 - Número entero 0–100 que representa la calidad del día de trabajo.
+- Solo sesiones padre/independientes cuentan (no sub-sesiones directamente).
 - Fórmula: `min(100, Int((sumScores / 8.0) * 100))`
-  donde `sumScores` = suma de `scoreContribution` de cada sesión del día.
+  donde `sumScores` = suma de `scoreContribution` de cada sesión padre del día.
 - `scoreContribution`:
   - Sesión completada: usa el `scoreWeight` del modo (deep=1.0, review=0.5, aiWait=0.2, rest=0.0)
   - Sesión incompleta: `scoreWeight * 0.3`

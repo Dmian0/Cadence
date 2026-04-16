@@ -8,13 +8,41 @@ struct Session: Codable, Identifiable {
     var iterationCount: Int
     var wasCompleted: Bool   // did the full duration, not skipped
 
-    init(mode: SessionMode) {
-        self.id             = UUID()
-        self.mode           = mode
-        self.startedAt      = Date()
-        self.endedAt        = nil
-        self.iterationCount = 0
-        self.wasCompleted   = false
+    // Sub-session hierarchy
+    var isSubSession: Bool
+    var parentSessionId: UUID?
+    var subSessions: [Session]
+
+    init(mode: SessionMode, parentId: UUID? = nil) {
+        self.id              = UUID()
+        self.mode            = mode
+        self.startedAt       = Date()
+        self.endedAt         = nil
+        self.iterationCount  = 0
+        self.wasCompleted    = false
+        self.isSubSession    = parentId != nil
+        self.parentSessionId = parentId
+        self.subSessions     = []
+    }
+
+    // Custom decoder for backward compatibility with persisted sessions
+    // that don't have the new sub-session fields
+    enum CodingKeys: String, CodingKey {
+        case id, mode, startedAt, endedAt, iterationCount, wasCompleted,
+             isSubSession, parentSessionId, subSessions
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id              = try c.decode(UUID.self, forKey: .id)
+        mode            = try c.decode(SessionMode.self, forKey: .mode)
+        startedAt       = try c.decode(Date.self, forKey: .startedAt)
+        endedAt         = try c.decodeIfPresent(Date.self, forKey: .endedAt)
+        iterationCount  = try c.decode(Int.self, forKey: .iterationCount)
+        wasCompleted    = try c.decode(Bool.self, forKey: .wasCompleted)
+        isSubSession    = try c.decodeIfPresent(Bool.self, forKey: .isSubSession) ?? false
+        parentSessionId = try c.decodeIfPresent(UUID.self, forKey: .parentSessionId)
+        subSessions     = try c.decodeIfPresent([Session].self, forKey: .subSessions) ?? []
     }
 
     var duration: TimeInterval {
@@ -34,9 +62,10 @@ struct DayRecord: Codable {
     var sessions: [Session]
     var streak: Int
 
-    // Flow score 0–100
+    // Flow score 0–100 (only parent/independent sessions count)
     var flowScore: Int {
-        let raw = sessions.reduce(0.0) { $0 + $1.scoreContribution }
+        let parentSessions = sessions.filter { !$0.isSubSession }
+        let raw = parentSessions.reduce(0.0) { $0 + $1.scoreContribution }
         // 8 completed deep work sessions ≈ 100
         return min(100, Int((raw / 8.0) * 100))
     }

@@ -39,12 +39,12 @@ AppDelegate.swift         → NSStatusItem + NSPopover + context menu, @MainActo
 │   └── DayStore          → Persistencia con UserDefaults (JSON por día)
 │
 ├── ViewModel/
-│   └── SessionViewModel  → @MainActor, ObservableObject. Cerebro de la app + BreakDebtLevel enum
+│   └── SessionViewModel  → @MainActor, ObservableObject. Cerebro de la app + OverflowContext + BreakDebtLevel enums
 │
 ├── Views/
-│   ├── PopoverView       → Panel principal (280px). Contiene: ControlsView, OverflowBannerView,
-│   │                       IterationCounterView, HistoryDotsView, StatsRowView, UndoPillView,
-│   │                       CircleButton, PillButtonStyle, StatCell (todos private structs)
+│   ├── PopoverView       → Panel principal (280px). Contiene: SubSessionChoiceBanner,
+│   │                       ControlsView, OverflowBannerView (contextual), IterationCounterView,
+│   │                       HistoryDotsView, StatsRowView, CircleButton, PillButtonStyle, StatCell
 │   ├── TimerRingView     → Anillo circular de progreso con pulse en overflow + checkmark
 │   └── ModeTabsView      → Tabs horizontales para los 4 modos
 │
@@ -57,6 +57,7 @@ AppDelegate.swift         → NSStatusItem + NSPopover + context menu, @MainActo
 
 ### Flow Score (0–100)
 - Reemplaza el antiguo "Completadas %". Se muestra en StatsRowView.
+- Solo sesiones padre/independientes cuentan (no sub-sesiones directamente).
 - Cada sesión completada suma su `scoreWeight` (deep=1.0, review=0.5, aiWait=0.2, rest=0).
 - Sesiones incompletas suman solo 30% de su peso.
 - 8 deep work sessions completadas = 100 puntos.
@@ -75,16 +76,25 @@ AppDelegate.swift         → NSStatusItem + NSPopover + context menu, @MainActo
 - Se guarda en cada `Session.iterationCount`.
 - Visible solo durante sesiones activas (no en break).
 
-### Undo Mode Change
-- Al cambiar de modo con sesión activa, aparece una píldora de undo por 3 segundos.
-- Guarda y restaura: modo, sesión activa, timer, iteraciones.
-- Revierte la sesión incompleta que se guardó al cambiar.
+### Session Hierarchy (Sub-sesiones)
+- Las sesiones tienen dos tipos: **padre** (iniciada desde tab) y **sub-sesión** (desde botón de acceso rápido).
+- Ciclo de trabajo con IA: Deep Work → AI Wait (sub) → Review (sub) → reanuda Deep Work padre.
+- La sesión padre se suspende con su tiempo restante guardado en `suspendedParentSession`/`suspendedParentSeconds`.
+- Sub-sesiones se almacenan en el array `parent.subSessions`, no directamente en `todaySessions`.
+- Al cambiar tab con sesión activa: aparece banner de elección (sub-sesión vs independiente).
+- Los botones de acceso rápido crean sub-sesiones directamente sin banner.
+- `endSession()` con padre suspendido: termina ambos, solo el padre va a `todaySessions`.
 
 ### Gentle Overflow
 - Timer llega a 0 → sesión se marca `wasCompleted = true` automáticamente.
-- Se muestra banner con "+5 min" / "Terminar".
+- Banner contextual según tipo de sesión (`OverflowContext`):
+  - Sesión normal: "+5 min" / "Terminar"
+  - AI Wait sub-sesión: "+5 min" / "Llegó la respuesta — revisar"
+  - Review sub-sesión: "+5 min" / "Terminar review" / "Volver a Deep Work"
 - Checkmark verde en el ring + texto "completada".
 - `extend()` suma tiempo (no reemplaza) y recalcula `totalSeconds` para el anillo.
+- Tras cada +5 min, si el tiempo expira se vuelve a mostrar el banner (repetible N veces).
+- Al terminar, el timer se resetea a la duración original del modo.
 
 ### Persistencia
 - `UserDefaults` con key `cadence_sessions_YYYY-MM-DD` por día.
