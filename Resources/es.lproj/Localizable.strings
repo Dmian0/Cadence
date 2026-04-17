@@ -33,6 +33,7 @@
 
 // Sub-session overflow
 "finish_review" = "Terminar review";
+"review_short" = "Ya llegó — revisar";
 
 // History
 "today_sessions" = "hoy, %d ses.";

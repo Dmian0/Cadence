@@ -109,7 +109,7 @@ struct PopoverView: View {
             }
 
             // ── Session history dots ─────────────────────────────
-            HistoryDotsView(sessions: vm.recentHistory, currentMode: vm.currentMode, totalCount: vm.todaySessions.count)
+            HistoryDotsView(sessions: vm.recentHistory, currentMode: vm.currentMode, totalCount: vm.totalSessionCount)
 
             Divider().opacity(0.5)
 
@@ -267,18 +267,25 @@ private struct OverflowBannerView: View {
         }
     }
 
-    // AI Wait sub-session: "+5 min" / "Llegó la respuesta — revisar"
+    // AI Wait sub-session: "+5 min" / "Ya llegó — revisar" / "Volver a Deep Work"
     private var aiWaitSubOverflowButtons: some View {
-        HStack(spacing: 8) {
-            Button(NSLocalizedString("extend_five", comment: "")) {
-                vm.extendSession()
-            }
-            .buttonStyle(PillButtonStyle(color: vm.currentMode.color))
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                Button(NSLocalizedString("extend_five", comment: "")) {
+                    vm.extendSession()
+                }
+                .buttonStyle(PillButtonStyle(color: vm.currentMode.color))
 
-            Button(NSLocalizedString("response_arrived_review", comment: "")) {
-                vm.aiWaitOverflowStartReview()
+                Button(NSLocalizedString("review_short", comment: "")) {
+                    vm.aiWaitOverflowStartReview()
+                }
+                .buttonStyle(PillButtonStyle(color: SessionMode.review.color))
             }
-            .buttonStyle(PillButtonStyle(color: SessionMode.review.color))
+
+            Button(NSLocalizedString("return_to_deep_work", comment: "")) {
+                vm.returnToDeepWork()
+            }
+            .buttonStyle(PillButtonStyle(color: SessionMode.deep.color))
         }
     }
 
@@ -332,7 +339,7 @@ private struct HistoryDotsView: View {
     let currentMode: SessionMode
     let totalCount: Int
 
-    private let totalSlots = 10
+    private let totalSlots = 14
 
     var body: some View {
         let visibleSessions = Array(sessions.suffix(totalSlots - 1))

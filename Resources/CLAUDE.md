@@ -39,6 +39,7 @@ String(format: NSLocalizedString("today_sessions", comment: ""), count)
 | `response_arrived_review` | Llegó la respuesta — revisar | Response arrived — review | Quick-action + overflow |
 | `return_to_deep_work` | Volver a Deep Work | Back to Deep Work | Quick-action + overflow |
 | `finish_review` | Terminar review | Finish review | OverflowBannerView (review sub) |
+| `review_short` | Ya llegó — revisar | Arrived — review | OverflowBannerView (aiWait sub) |
 | `today_sessions` | hoy, %d ses. | today, %d ses. | HistoryDotsView |
 | `focus_today` | Foco hoy | Focus today | StatsRowView |
 | `ai_wait_stat` | Esperas IA | AI wait | StatsRowView |

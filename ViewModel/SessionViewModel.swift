@@ -41,6 +41,23 @@ final class SessionViewModel: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
+
+        // Detect calendar day rollover while app stays open past midnight
+        NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleDayRollover()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleDayRollover() {
+        // Only refresh when idle — don't interrupt an active session.
+        // If a session is active, its next endSession will save against
+        // the new day's key (DayStore uses Date() on each save).
+        if activeSession == nil {
+            loadToday()
+        }
     }
 
     // MARK: - Mode
@@ -48,10 +65,18 @@ final class SessionViewModel: ObservableObject {
     func setMode(_ mode: SessionMode) {
         guard mode != currentMode else { return }
 
+        // Tapping the tab of the suspended parent's mode resumes it directly
+        if let parent = suspendedParentSession, parent.mode == mode {
+            completeCurrentSubSession()
+            resumeParentSession()
+            return
+        }
+
         if activeSession != nil {
             // Active session — show choice banner, pause timer
             pendingMode = mode
             showSubSessionChoice = true
+            showOverflowBanner = false
             timer.pause()
         } else {
             // No active session — clean switch
@@ -85,8 +110,9 @@ final class SessionViewModel: ObservableObject {
         showSubSessionChoice = false
         pendingMode = nil
 
-        // Close current session as completed (user chose to end it)
-        endSession(completed: true)
+        // Close current session — user abandoned it to start a new independent one.
+        // The suspended parent (if any) is also ended as incomplete.
+        endSession(completed: false)
 
         // Clear any suspended parent
         suspendedParentSession = nil
@@ -102,7 +128,13 @@ final class SessionViewModel: ObservableObject {
     func cancelModeChange() {
         showSubSessionChoice = false
         pendingMode = nil
-        if activeSession != nil { timer.start() }
+        guard activeSession != nil else { return }
+        if timer.isOverflow {
+            // Session already ended — restore overflow banner instead of restarting
+            showOverflowBanner = true
+        } else {
+            timer.start()
+        }
     }
 
     // MARK: - Quick-action transitions
@@ -145,9 +177,8 @@ final class SessionViewModel: ObservableObject {
 
     func endSession(completed: Bool) {
         guard var session = activeSession else { return }
-        session.endedAt        = Date()
-        session.wasCompleted   = completed
         session.iterationCount = iterationCount
+        session.markEnded(completed: completed)
 
         timer.stop()
         activeSession      = nil
@@ -158,8 +189,7 @@ final class SessionViewModel: ObservableObject {
         if var parent = suspendedParentSession {
             // Ending during a sub-session — terminate parent too
             parent.subSessions.append(session)
-            parent.endedAt = Date()
-            parent.wasCompleted = completed
+            parent.markEnded(completed: completed)
             todaySessions.append(parent)
             suspendedParentSession = nil
             suspendedParentSeconds = 0
@@ -272,9 +302,17 @@ final class SessionViewModel: ObservableObject {
         loadToday()
     }
 
-    // Last 10 sessions for the dot history strip
+    // Last 14 sessions for the dot history strip — flattened so sub-sessions
+    // appear as small dots inline in chronological order.
     var recentHistory: [Session] {
-        Array(todaySessions.suffix(10))
+        let flat = todaySessions.flatMap { [$0] + $0.subSessions }
+        let sorted = flat.sorted { $0.startedAt < $1.startedAt }
+        return Array(sorted.suffix(14))
+    }
+
+    // Total sessions including sub-sessions — drives "hoy, N ses." counter
+    var totalSessionCount: Int {
+        todaySessions.count + todaySessions.reduce(0) { $0 + $1.subSessions.count }
     }
 
     // MARK: - Sub-session helpers (private)
@@ -299,9 +337,8 @@ final class SessionViewModel: ObservableObject {
 
     private func completeCurrentSubSession() {
         guard var session = activeSession else { return }
-        session.endedAt = Date()
-        session.wasCompleted = true
         session.iterationCount = iterationCount
+        session.markEnded(completed: true)
         timer.stop()
 
         if suspendedParentSession != nil {
@@ -347,9 +384,6 @@ final class SessionViewModel: ObservableObject {
             setMode(.deep)
             return
         }
-
-        // Timer reached zero → session counts as completed
-        activeSession?.wasCompleted = true
 
         // Determine overflow context based on sub-session state
         if activeSession?.isSubSession == true, suspendedParentSession != nil {

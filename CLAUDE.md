@@ -17,10 +17,12 @@ Pomodoro timer para macOS diseñado para desarrolladores que trabajan con IA. Vi
 
 | Modo | Duración | Peso en Flow Score | Color | Símbolo |
 |---|---|---|---|---|
-| Deep Work | 25 min | 1.0 | `#7F77DD` (púrpura) | bolt.fill |
-| AI Wait | 5 min | 0.2 | `#1D9E75` (verde) | hourglass |
-| Review | 10 min | 0.5 | `#EF9F27` (naranja) | eye.fill |
-| Break | 5 min | 0.0 | `#378ADD` (azul) | cloud.fill |
+| Deep Work | 25 min* | 1.0 | `#7F77DD` (púrpura) | bolt.fill |
+| AI Wait | 5 min* | 0.2 | `#1D9E75` (verde) | hourglass |
+| Review | 10 min* | 0.5 | `#EF9F27` (naranja) | eye.fill |
+| Break | 5 min* | 0.0 | `#378ADD` (azul) | cloud.fill |
+
+\* Duraciones por defecto. Ahora son **configurables** via `SettingsStore` (UserDefaults). UI de edición para v2 — por ahora: `defaults write com.cadence.app cadence_duration_<mode> -int <minutos>`.
 
 ## Arquitectura (MVVM)
 
@@ -82,8 +84,21 @@ AppDelegate.swift         → NSStatusItem + NSPopover + context menu, @MainActo
 - La sesión padre se suspende con su tiempo restante guardado en `suspendedParentSession`/`suspendedParentSeconds`.
 - Sub-sesiones se almacenan en el array `parent.subSessions`, no directamente en `todaySessions`.
 - Al cambiar tab con sesión activa: aparece banner de elección (sub-sesión vs independiente).
+- **Excepción**: si el modo destino coincide con el del padre suspendido, se reanuda el padre directamente (equivale a "Volver a Deep Work") — sin banner.
 - Los botones de acceso rápido crean sub-sesiones directamente sin banner.
 - `endSession()` con padre suspendido: termina ambos, solo el padre va a `todaySessions`.
+
+### Umbral de completitud (80%)
+- `wasCompleted` se calcula al cerrar cada sesión (`Session.markEnded(completed:)`).
+- Si el usuario hace skip explícito → `wasCompleted = false` sin importar la duración.
+- Si no: `wasCompleted = duration >= mode.duration * 0.8`.
+- Afecta: Flow Score (sesiones incompletas pesan 30%), Streak, opacidad de dots.
+- Ejemplo: Deep Work configurado a 25 min → necesita ≥ 20 min para contar como completo.
+
+### Stats de duración — flatten + floor
+- `totalFocusTime` y `totalAIWaitTime` en `DayRecord` ahora suman sub-sessions además de padres.
+- Floor anti-ruido: sesiones con duración < 6 s se excluyen (evita pollution por taps accidentales).
+- `flowScore`, `workSessionsSinceBreak` y `completionRate` siguen operando solo sobre padres/independientes (decisión explícita).
 
 ### Gentle Overflow
 - Timer llega a 0 → sesión se marca `wasCompleted = true` automáticamente.

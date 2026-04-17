@@ -54,6 +54,19 @@ struct Session: Codable, Identifiable {
         guard wasCompleted else { return mode.scoreWeight * 0.3 }
         return mode.scoreWeight
     }
+
+    // Close this session. Sets endedAt and computes wasCompleted from duration.
+    // Threshold: duration >= configured mode duration * 0.8.
+    // If completed=false (explicit skip), always marks wasCompleted=false.
+    mutating func markEnded(completed: Bool) {
+        endedAt = Date()
+        guard completed else {
+            wasCompleted = false
+            return
+        }
+        let target = Double(mode.duration)
+        wasCompleted = duration >= target * 0.8
+    }
 }
 
 // MARK: - DayRecord  (what gets persisted per calendar day)
@@ -61,6 +74,16 @@ struct DayRecord: Codable {
     var date: Date
     var sessions: [Session]
     var streak: Int
+
+    // Flatten top-level + nested sub-sessions (for duration-based stats)
+    private var allSessionsFlat: [Session] {
+        sessions + sessions.flatMap { $0.subSessions }
+    }
+
+    // 6-second floor filters tap-accident sub-sessions out of duration stats
+    private var countableSessions: [Session] {
+        allSessionsFlat.filter { $0.duration >= 6 }
+    }
 
     // Flow score 0–100 (only parent/independent sessions count)
     var flowScore: Int {
@@ -71,13 +94,13 @@ struct DayRecord: Codable {
     }
 
     var totalFocusTime: TimeInterval {
-        sessions
+        countableSessions
             .filter { $0.mode == .deep || $0.mode == .review }
             .reduce(0) { $0 + $1.duration }
     }
 
     var totalAIWaitTime: TimeInterval {
-        sessions
+        countableSessions
             .filter { $0.mode == .aiWait }
             .reduce(0) { $0 + $1.duration }
     }

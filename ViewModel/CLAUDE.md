@@ -28,10 +28,10 @@ Cerebro de la app. Un solo archivo con el ViewModel principal, OverflowContext y
 ### Métodos públicos clave
 | Método | Qué hace |
 |---|---|
-| `setMode(_:)` | Cambia modo. Si hay sesión activa: muestra banner de elección (`showSubSessionChoice`). Si no: cambio limpio |
+| `setMode(_:)` | Cambia modo. Si el modo destino es el del padre suspendido: reanuda el padre sin banner. Si hay sesión activa (otro modo): muestra banner de elección (`showSubSessionChoice`). Si no: cambio limpio |
 | `confirmAsSubSession()` | Desde banner: suspende padre (o completa sub actual), inicia sub-sesión del modo pendiente |
-| `confirmAsIndependent()` | Desde banner: termina sesión como completada, inicia nueva independiente |
-| `cancelModeChange()` | Cierra banner sin acción, reanuda timer |
+| `confirmAsIndependent()` | Desde banner: termina sesión **como incompleta** (user abandonó el flujo), inicia nueva independiente. Si había padre suspendido, se cierra también como incompleto |
+| `cancelModeChange()` | Cierra banner sin acción. Si el timer estaba en overflow, restaura el overflow banner en vez de reanudar el timer |
 | `activateAIWait()` | Quick-action: suspende sesión actual → inicia AI Wait sub-sesión |
 | `activateReview()` | Quick-action: completa AI Wait sub → inicia Review sub-sesión |
 | `returnToDeepWork()` | Quick-action: completa Review sub → reanuda sesión padre |
@@ -47,6 +47,10 @@ Cerebro de la app. Un solo archivo con el ViewModel principal, OverflowContext y
 | `finishReviewFromOverflow()` | Overflow Review sub: termina sesión (sub + padre) |
 | `reloadData()` | Reset total para dev: para timer, limpia todo el estado, recarga desde UserDefaults |
 
+### Day rollover
+- `init()` se suscribe a `.NSCalendarDayChanged`. Al cambio de día, `handleDayRollover()` llama `loadToday()` solo si no hay sesión activa (para no interrumpir).
+- Si hay sesión activa durante el cambio de día, se guardará contra la key del día nuevo en el próximo `store.save`.
+
 ### Flujo: Timer llega a 0 (`handleNaturalEnd`)
 1. Si modo es `.rest` → `endSession(completed: true)` + auto-switch a `.deep`
 2. Si es sub-sesión AI Wait → `overflowContext = .aiWaitSub` + overflow banner
@@ -61,7 +65,8 @@ Cerebro de la app. Un solo archivo con el ViewModel principal, OverflowContext y
 
 ### Computed stats (conectan DayRecord → UI)
 - `flowScore`, `focusTimeFormatted`, `aiWaitTimeFormatted`, `breakDebt`, `breakDebtLevel`
-- `recentHistory` — últimas 10 sesiones (`.suffix(10)`)
+- `recentHistory` — últimas 14 sesiones **flatten** (padres + subs) ordenadas por `startedAt`
+- `totalSessionCount` — total incluyendo sub-sessions (para el contador "hoy, N ses.")
 - `completionRate` — legacy, ya no se usa en UI pero sigue disponible
 
 ---

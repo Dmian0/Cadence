@@ -48,8 +48,8 @@ Vista principal del popover (280px ancho). Layout vertical:
 | `PillButtonStyle` | ButtonStyle tipo píldora con fondo semitransparente |
 
 ### History Dots — sliding window
-- Recibe `sessions` (ya recortado a `.suffix(10)` por el VM) + `totalCount` (count real)
-- Muestra `suffix(9)` de sesiones pasadas + 1 slot activo + slots vacíos
+- Recibe `sessions` (flatten `padres + subs` recortado a `.suffix(14)` por el VM) + `totalCount` (total incluyendo subs)
+- `totalSlots = 14`. Muestra `suffix(13)` de sesiones pasadas + 1 slot activo + slots vacíos
 - Tamaño de dot: 10px para padre/independiente, 7px para sub-sesión (`isSubSession`)
 - Opacity: 1.0 si completada, 0.35 si incompleta
 - El texto "hoy, N ses." usa `totalCount`, no `sessions.count`
@@ -82,4 +82,4 @@ Anillo circular de progreso SVG-style. Stateless — recibe props.
 
 - Tab activo: fondo `mode.color.opacity(0.15)`, texto en `mode.color`, borde `mode.color.opacity(0.5)`
 - Tab inactivo: sin fondo, texto `.secondary`, borde `.primary.opacity(0.1)`
-- Al tap: llama `vm.setMode(mode)` — si hay sesión activa, muestra banner de elección sub-sesión
+- Al tap: llama `vm.setMode(mode)` — si hay sesión activa, muestra banner de elección sub-sesión. Excepción: si el modo tocado es el del padre suspendido, reanuda el padre directamente sin banner.

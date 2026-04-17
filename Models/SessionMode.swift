@@ -15,13 +15,8 @@ enum SessionMode: String, CaseIterable, Codable {
         }
     }
 
-    var duration: Int {  // seconds
-        switch self {
-        case .deep:   return 25 * 60
-        case .aiWait: return 5  * 60   // adaptive — resets freely
-        case .review: return 10 * 60
-        case .rest:   return 5  * 60
-        }
+    var duration: Int {  // seconds (configurable via SettingsStore)
+        SettingsStore.shared.durationSeconds(for: self)
     }
 
     // Flow score weight — deep work is worth more than passive states

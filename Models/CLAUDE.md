@@ -10,7 +10,7 @@ Enum con los 4 modos: `.deep`, `.aiWait`, `.review`, `.rest`.
 | Propiedad | Tipo | Descripción |
 |---|---|---|
 | `label` | `String` | Nombre localizado (`NSLocalizedString`) |
-| `duration` | `Int` | Duración en segundos (deep=1500, aiWait=300, review=600, rest=300) |
+| `duration` | `Int` | Duración en segundos. **Configurable** via `SettingsStore` (ver Store/CLAUDE.md). Defaults: deep=1500, aiWait=300, review=600, rest=300 |
 | `scoreWeight` | `Double` | Peso para Flow Score (deep=1.0, review=0.5, aiWait=0.2, rest=0.0) |
 | `color` | `Color` | Color principal del modo (hex) |
 | `lightBackground` | `Color` | Color claro para light mode (hex). **No usar para fondos de UI** — usar `color.opacity(0.15)` en su lugar para soporte dark mode |
@@ -38,7 +38,7 @@ Una sesión individual de trabajo.
 | `startedAt` | `Date` | Inicio |
 | `endedAt` | `Date?` | Fin (nil si activa) |
 | `iterationCount` | `Int` | Iteraciones IA contadas |
-| `wasCompleted` | `Bool` | Si completó la duración completa. Se marca `true` automáticamente cuando el timer llega a 0 (en `handleNaturalEnd`), no solo cuando el usuario hace click en "Terminar" |
+| `wasCompleted` | `Bool` | Si la sesión duró **≥ 80%** de la duración configurada del modo. Se calcula en `markEnded(completed:)` al cerrar. Un skip explícito (`completed: false`) fuerza `false` sin importar la duración |
 | `isSubSession` | `Bool` | `true` si fue iniciada como sub-sesión (derivado de `parentId != nil` en init) |
 | `parentSessionId` | `UUID?` | ID de la sesión padre (nil si es independiente) |
 | `subSessions` | `[Session]` | Sub-sesiones completadas dentro de esta (solo relevante en sesiones padre) |
@@ -51,6 +51,9 @@ Una sesión individual de trabajo.
 - `duration` — Si `endedAt` es nil, usa `Date()` actual. Cuidado: esto significa que una sesión activa tiene duración creciente.
 - `scoreContribution` — `scoreWeight` si completada, `scoreWeight * 0.3` si no.
 
+**Método mutante:**
+- `markEnded(completed:)` — cierra la sesión: setea `endedAt = Date()` y calcula `wasCompleted` con umbral 80% de la duración configurada del modo. Si `completed: false` fuerza `wasCompleted = false` (skip explícito). Usar siempre que una sesión se cierre en vez de mutar `endedAt`/`wasCompleted` directamente.
+
 ### DayRecord (struct Codable)
 
 Agregado de un día. Se construye on-demand desde `todaySessions` en el ViewModel, no se persiste directamente.
@@ -58,7 +61,7 @@ Agregado de un día. Se construye on-demand desde `todaySessions` en el ViewMode
 | Propiedad | Tipo | Descripción |
 |---|---|---|
 | `flowScore` | `Int` | 0–100, solo sesiones padre (`!isSubSession`). `min(100, (suma_pesos / 8.0) * 100)` |
-| `totalFocusTime` | `TimeInterval` | Suma de duración de sesiones `.deep` + `.review` |
-| `totalAIWaitTime` | `TimeInterval` | Suma de duración de sesiones `.aiWait` |
+| `totalFocusTime` | `TimeInterval` | Suma de duración de sesiones `.deep` + `.review`. **Incluye sub-sessions** vía flatten. Excluye sesiones < 6 s (floor anti-ruido) |
+| `totalAIWaitTime` | `TimeInterval` | Suma de duración de sesiones `.aiWait`. **Incluye sub-sessions** vía flatten. Excluye sesiones < 6 s |
 | `completionRate` | `Int` | % de sesiones completadas (legacy, ya no se muestra en UI) |
 | `workSessionsSinceBreak` | `Int` | Sesiones de trabajo consecutivas desde el último `.rest` |

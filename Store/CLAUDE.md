@@ -2,6 +2,25 @@
 
 Persistencia con UserDefaults. Un solo archivo, sin dependencias.
 
+## SettingsStore.swift
+
+Singleton para preferencias de usuario. Actualmente almacena las 4 duraciones de sesión (minutos). La UI para editarlas queda para v2 — por ahora solo accesible via `defaults write com.cadence.app <key> -int <minutos>`.
+
+### Keys
+| Key | Default (min) | Modo |
+|---|---|---|
+| `cadence_duration_deep` | 25 | `.deep` |
+| `cadence_duration_aiWait` | 5 | `.aiWait` |
+| `cadence_duration_review` | 10 | `.review` |
+| `cadence_duration_rest` | 5 | `.rest` |
+
+### API
+- `SettingsStore.shared` — singleton.
+- `durationSeconds(for: SessionMode) -> Int` — lee minutos de UserDefaults (o default), devuelve segundos.
+- `setDurationMinutes(_ minutes: Int, for: SessionMode)` — escribe en UserDefaults.
+
+`SessionMode.duration` llama a este store, así que cambios en UserDefaults se reflejan inmediatamente en nuevas sesiones.
+
 ## DayStore.swift
 
 Guarda y carga sesiones del día + streak global.
